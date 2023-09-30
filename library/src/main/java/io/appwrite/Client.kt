@@ -4,38 +4,44 @@ import android.content.Context
 import android.content.pm.PackageManager
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
-import io.appwrite.cookies.stores.SharedPreferencesCookieStore
+import io.appwrite.cookies.stores.AcceptAllCookiesStorage
 import io.appwrite.exceptions.AppwriteException
-import io.appwrite.extensions.fromJson
 import io.appwrite.json.PreciseNumberAdapter
 import io.appwrite.models.InputFile
 import io.appwrite.models.UploadProgress
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.cookies.HttpCookies
+import io.ktor.client.plugins.logging.LogLevel
+import io.ktor.client.plugins.logging.Logger
+import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.forms.FormPart
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
+import io.ktor.client.request.headers
+import io.ktor.client.request.parameter
+import io.ktor.client.request.request
+import io.ktor.client.request.setBody
+import io.ktor.client.request.url
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.readBytes
+import io.ktor.http.ContentType
+import io.ktor.http.HttpMethod
+import io.ktor.http.contentType
+import io.ktor.serialization.gson.gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.*
-import okhttp3.Headers.Companion.toHeaders
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.BufferedInputStream
-import java.io.BufferedReader
 import java.io.File
 import java.io.RandomAccessFile
-import java.io.IOException
-import java.net.CookieManager
-import java.net.CookiePolicy
-import java.security.SecureRandom
-import java.security.cert.X509Certificate
-import javax.net.ssl.HostnameVerifier
-import javax.net.ssl.SSLContext
-import javax.net.ssl.SSLSocketFactory
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
 import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.resume
 
 class Client @JvmOverloads constructor(
     context: Context,
@@ -58,16 +64,13 @@ class Client @JvmOverloads constructor(
         PreciseNumberAdapter()
     ).create()
 
-    lateinit var http: OkHttpClient
+    lateinit var http: HttpClient
 
     private val headers: MutableMap<String, String>
 
     val config: MutableMap<String, String>
 
-    private val cookieJar = CookieManager(
-        SharedPreferencesCookieStore(context, "myCookie"),
-        CookiePolicy.ACCEPT_ALL
-    )
+    val cookieJar = AcceptAllCookiesStorage(context, "myCookie")
 
     private val appVersion by lazy {
         try {
@@ -148,51 +151,28 @@ class Client @JvmOverloads constructor(
     fun setSelfSigned(status: Boolean): Client {
         selfSigned = status
 
-        val builder = OkHttpClient()
-            .newBuilder()
-            .cookieJar(JavaNetCookieJar(cookieJar))
-
         if (!selfSigned) {
-            http = builder.build()
-            return this
-        }
-
-        try {
-            // Create a trust manager that does not validate certificate chains
-            val trustAllCerts = arrayOf<TrustManager>(
-                @Suppress("CustomX509TrustManager")
-                object : X509TrustManager {
-                    @Suppress("TrustAllX509TrustManager")
-                    override fun checkClientTrusted(
-                        chain: Array<X509Certificate>,
-                        authType: String
-                    ) {
-                    }
-
-                    @Suppress("TrustAllX509TrustManager")
-                    override fun checkServerTrusted(
-                        chain: Array<X509Certificate>,
-                        authType: String
-                    ) {
-                    }
-
-                    override fun getAcceptedIssuers(): Array<X509Certificate> {
-                        return arrayOf()
-                    }
+            http = HttpClient {
+                install(HttpCookies) {
+                    storage = cookieJar
                 }
-            )
-            // Install the all-trusting trust manager
-            val sslContext = SSLContext.getInstance("SSL")
-            sslContext.init(null, trustAllCerts, SecureRandom())
+                install(WebSockets) {
 
-            // Create an ssl socket factory with our all-trusting manager
-            val sslSocketFactory: SSLSocketFactory = sslContext.socketFactory
-            builder.sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
-            builder.hostnameVerifier(HostnameVerifier { _, _ -> true })
-
-            http = builder.build()
-        } catch (e: Exception) {
-            throw RuntimeException(e)
+                }
+                install(ContentNegotiation) {
+                    gson()
+                }
+                install(Logging) {
+                    logger = object : Logger {
+                        override fun log(message: String) {
+                            println(message)
+                        }
+                    }
+                    level = LogLevel.ALL
+                }
+                expectSuccess = true
+            }
+            return this
         }
 
         return this
@@ -261,11 +241,15 @@ class Client @JvmOverloads constructor(
     ): T {
         val filteredParams = params.filterValues { it != null }
 
-        val requestHeaders = this.headers.toHeaders().newBuilder()
-            .addAll(headers.toHeaders())
-            .build()
+        val httpBuilder = HttpRequestBuilder()
+        httpBuilder.url(endPoint + path)
+        httpBuilder.method = HttpMethod(method)
 
-        val httpBuilder = (endPoint + path).toHttpUrl().newBuilder()
+        httpBuilder.headers {
+            this@Client.headers.plus(headers).forEach { (key, value) ->
+                append(key, value)
+            }
+        }
 
         if ("GET" == method) {
             filteredParams.forEach {
@@ -277,7 +261,7 @@ class Client @JvmOverloads constructor(
                     is List<*> -> {
                         val list = it.value as List<*>
                         for (index in list.indices) {
-                            httpBuilder.addQueryParameter(
+                            httpBuilder.parameter(
                                 "${it.key}[]",
                                 list[index].toString()
                             )
@@ -285,56 +269,49 @@ class Client @JvmOverloads constructor(
                     }
 
                     else -> {
-                        httpBuilder.addQueryParameter(it.key, it.value.toString())
+                        httpBuilder.parameter(it.key, it.value.toString())
                     }
                 }
             }
-            val request = Request.Builder()
-                .url(httpBuilder.build())
-                .headers(requestHeaders)
-                .get()
-                .build()
 
-            return awaitResponse(request, responseType, converter)
+            return awaitResponse(httpBuilder, responseType, converter)
         }
 
-        val body = if (MultipartBody.FORM.toString() == headers["content-type"]) {
-            val builder = MultipartBody.Builder().setType(MultipartBody.FORM)
+        if (MultipartBody.FORM.toString() == headers["content-type"]) {
+            httpBuilder.setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        filteredParams.forEach {
+                            when {
+                                it.key == "file" -> {
+                                    //add file
+                                    append(it.value as FormPart<*>)
+                                }
 
-            filteredParams.forEach {
-                when {
-                    it.key == "file" -> {
-                        builder.addPart(it.value as MultipartBody.Part)
-                    }
+                                it.value is List<*> -> {
+                                    val list = it.value as List<*>
+                                    for (index in list.indices) {
+                                        append("${it.key}[]", list[index].toString())
+                                    }
+                                }
 
-                    it.value is List<*> -> {
-                        val list = it.value as List<*>
-                        for (index in list.indices) {
-                            builder.addFormDataPart(
-                                "${it.key}[]",
-                                list[index].toString()
-                            )
+                                else -> {
+                                    append(it.key, it.value.toString())
+                                }
+                            }
                         }
                     }
-
-                    else -> {
-                        builder.addFormDataPart(it.key, it.value.toString())
-                    }
-                }
-            }
-            builder.build()
+                )
+            )
         } else {
-            gson.toJson(filteredParams)
-                .toRequestBody("application/json".toMediaType())
+            val body = gson.toJson(filteredParams)
+            httpBuilder.apply {
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
         }
 
-        val request = Request.Builder()
-            .url(httpBuilder.build())
-            .headers(requestHeaders)
-            .method(method, body)
-            .build()
-
-        return awaitResponse(request, responseType, converter)
+        return awaitResponse(httpBuilder, responseType, converter)
     }
 
     /**
@@ -477,81 +454,36 @@ class Client @JvmOverloads constructor(
      */
     @Throws(AppwriteException::class)
     private suspend fun <T> awaitResponse(
-        request: Request,
+        request: HttpRequestBuilder,
         responseType: Class<T>,
         converter: ((Any) -> T)? = null
-    ) = suspendCancellableCoroutine<T> {
-        http.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                if (it.isCancelled) {
-                    return
+    ): T {
+        return try {
+            val response: HttpResponse = http.request(builder = request)
+
+            when (responseType) {
+                Boolean::class.java -> {
+                    return true as T
                 }
-                it.cancel(e)
+
+                ByteArray::class.java -> {
+                    return response.readBytes() as T
+                }
             }
 
-            @Suppress("UNCHECKED_CAST")
-            override fun onResponse(call: Call, response: Response) {
-                if (!response.isSuccessful) {
-                    val body = response.body!!
-                        .charStream()
-                        .buffered()
-                        .use(BufferedReader::readText)
-
-                    val error =
-                        if (response.headers["content-type"]?.contains("application/json") == true) {
-                            val map = gson.fromJson<Map<String, Any>>(
-                                body,
-                                object : TypeToken<Map<String, Any>>() {}.type
-                            )
-                            AppwriteException(
-                                map["message"] as? String ?: "",
-                                (map["code"] as Number).toInt(),
-                                map["type"] as? String ?: "",
-                                body
-                            )
-                        } else {
-                            AppwriteException(body, response.code)
-                        }
-                    it.cancel(error)
-                    return
-                }
-                when {
-                    responseType == Boolean::class.java -> {
-                        it.resume(true as T)
-                        return
-                    }
-
-                    responseType == ByteArray::class.java -> {
-                        it.resume(
-                            response.body!!
-                                .byteStream()
-                                .buffered()
-                                .use(BufferedInputStream::readBytes) as T
-                        )
-                        return
-                    }
-
-                    response.body == null -> {
-                        it.resume(true as T)
-                        return
-                    }
-                }
-                val body = response.body!!
-                    .charStream()
-                    .buffered()
-                    .use(BufferedReader::readText)
-                if (body.isEmpty()) {
-                    it.resume(true as T)
-                    return
-                }
-                val map = gson.fromJson<Any>(
-                    body,
-                    object : TypeToken<Any>() {}.type
-                )
-                it.resume(
-                    converter?.invoke(map) ?: map as T
-                )
+            val body = response.bodyAsText()
+            if (body.isEmpty()) {
+                return true as T
             }
-        })
+
+            val map = gson.fromJson<Any>(
+                body,
+                object : TypeToken<Any>() {}.type
+            )
+            return converter?.invoke(map) ?: map as T
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null as T
+        }
     }
 }

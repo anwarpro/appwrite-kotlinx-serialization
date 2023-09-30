@@ -32,6 +32,7 @@ import com.helloanwar.kmmapplication.ui.utils.NetworkResponse
 import io.appwrite.Client
 import io.appwrite.models.Session
 import io.appwrite.services.Account
+import io.appwrite.services.Databases
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,7 +72,7 @@ private fun AppScreen() {
             try {
                 currentSession = NetworkResponse.Loading
                 val response = account.getSession("current")
-                currentSession = NetworkResponse.Success(response)
+                currentSession = NetworkResponse.Success(response!!)
                 currentScreen = Screen.DASHBOARD
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -128,7 +129,8 @@ private fun AppScreen() {
                                 onLogin = {
                                     currentScreen = Screen.LOGIN
                                 },
-                                account = Account(client)
+                                account = Account(client),
+                                databases = Databases(client)
                             )
                         }
                     }

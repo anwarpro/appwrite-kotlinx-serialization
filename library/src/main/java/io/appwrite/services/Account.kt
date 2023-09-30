@@ -1,23 +1,25 @@
 package io.appwrite.services
 
 import android.net.Uri
+import androidx.activity.ComponentActivity
 import io.appwrite.Client
-import io.appwrite.models.*
+import io.appwrite.WebAuthComponent
+import io.appwrite.cookies.stores.fillDefaults
 import io.appwrite.exceptions.AppwriteException
 import io.appwrite.extensions.classOf
-import io.appwrite.WebAuthComponent
-import androidx.activity.ComponentActivity
-import okhttp3.Cookie
-import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.io.File
+import io.appwrite.models.*
+import io.ktor.http.Url
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /**
  * The Account service allows you to authenticate and manage a user account.
-**/
+ **/
 class Account : Service {
 
-    public constructor (client: Client) : super(client) { }
+    public constructor (client: Client) : super(client) {}
 
     /**
      * Get Account
@@ -875,11 +877,13 @@ class Account : Service {
                 null -> {
                     return@forEach
                 }
+
                 is List<*> -> {
                     apiQuery.add("${it.key}[]=${it.value.toString()}")
                 }
+
                 else -> {
-                   apiQuery.add("${it.key}=${it.value.toString()}")
+                    apiQuery.add("${it.key}=${it.value.toString()}")
                 }
             }
         }
@@ -887,29 +891,29 @@ class Account : Service {
         val apiUrl = Uri.parse("${client.endPoint}${apiPath}?${apiQuery.joinToString("&")}")
         val callbackUrlScheme = "appwrite-callback-${client.config["project"]}"
 
+        val job = Job() + Dispatchers.IO
+        val task = CoroutineScope(job)
+
         WebAuthComponent.authenticate(activity, apiUrl, callbackUrlScheme) {
             if (it.isFailure) {
                 throw it.exceptionOrNull()!!
             }
 
-            val resultUrl = it.getOrNull()!!
-            val uri = Uri.parse(resultUrl)
+            val resultUrl = Url(it.getOrNull()!!)
+            val uri = Uri.parse(it.getOrNull()!!)
             val key = uri.getQueryParameter("key")
             val secret = uri.getQueryParameter("secret")
             if (key == null || secret == null) {
                 throw AppwriteException("Authentication cookie missing!")
             }
-            val cookie = Cookie.Builder()
-                .name(key)
-                .value(secret)
-                .domain(Uri.parse(client.endPoint).host!!)
-                .httpOnly()
-                .build()
-            
-            client.http.cookieJar.saveFromResponse(
-                client.endPoint.toHttpUrl(),
-                listOf(cookie)
-            )
+            val cookie = io.ktor.http.Cookie(name = key, value = secret).fillDefaults(resultUrl)
+
+            task.launch {
+                client.cookieJar.addCookie(
+                    resultUrl,
+                    cookie
+                )
+            }
         }
     }
 

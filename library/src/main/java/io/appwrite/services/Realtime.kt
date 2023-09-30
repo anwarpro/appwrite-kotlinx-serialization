@@ -68,12 +68,12 @@ class Realtime(client: Client) : Service(client), CoroutineScope {
             originalRequest = request,
             listener = AppwriteWebSocketListener(),
             random = Random(),
-            pingIntervalMillis = client.http.pingIntervalMillis.toLong(),
+            pingIntervalMillis = 20_000,
             extensions = null,
-            minimumDeflateSize = client.http.minWebSocketMessageToCompress
+            minimumDeflateSize = 1555
         )
 
-        socket!!.connect(client.http)
+//        socket!!.connect(client.http)
     }
 
     private fun closeSocket() {

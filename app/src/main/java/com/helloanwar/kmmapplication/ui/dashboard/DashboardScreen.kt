@@ -1,15 +1,20 @@
 package com.helloanwar.kmmapplication.ui.dashboard
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,15 +30,19 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.helloanwar.kmmapplication.ui.theme.KmmApplicationTheme
 import com.helloanwar.kmmapplication.ui.utils.NetworkResponse
+import io.appwrite.ID
 import io.appwrite.models.User
 import io.appwrite.services.Account
+import io.appwrite.services.Databases
 import kotlinx.coroutines.launch
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ColumnScope.Dashboard(
     onLogin: () -> Unit,
-    account: Account? = null
+    account: Account? = null,
+    databases: Databases? = null
 ) {
     var userResponse by remember {
         mutableStateOf<NetworkResponse<User<Map<String, Any>>>>(NetworkResponse.Idle)
@@ -84,31 +93,77 @@ fun ColumnScope.Dashboard(
             .fillMaxWidth()
     ) {
         val user = (userResponse as NetworkResponse.Success).data
-        Text(
-            text = "Welcome, ${user.name}",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-        Spacer(
-            modifier = Modifier
-                .height(16.dp)
-        )
-        TextButton(
-            onClick = {
-                scope.launch {
-                    try {
-                        account!!.deleteSession("current")
-                        //go login page
-                        onLogin()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
+        var productName by remember { mutableStateOf("") }
+        var allProducts by remember {
+            mutableStateOf(NetworkResponse.Idle)
+        }
 
+        Column {
+            Text(
+                text = "Welcome, ${user.name}",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            Spacer(
+                modifier = Modifier
+                    .height(16.dp)
+            )
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                //add product text box
+                OutlinedTextField(
+                    value = productName,
+                    onValueChange = {
+                        productName = it
+                    },
+                    placeholder = {
+                        Text(text = "Product name")
+                    }
+                )
+
+                Button(
+                    onClick = {
+                        //add product
+                        scope.launch {
+                            try {
+                                databases!!.createDocument(
+                                    databaseId = "64d7161aef4a3d5e1223",
+                                    collectionId = "64d71622df99d4c128c4",
+                                    documentId = ID.unique(),
+                                    data = mapOf(
+                                        "name" to productName,
+                                        "media" to emptyList<String>()
+                                    )
+                                )
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                ) {
+                    Text(text = "Add")
                 }
-            },
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
-        ) {
-            Text(text = "Logout", color = MaterialTheme.colorScheme.error)
+            }
+
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        try {
+                            account!!.deleteSession("current")
+                            //go login page
+                            onLogin()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+
+                    }
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+            ) {
+                Text(text = "Logout", color = MaterialTheme.colorScheme.error)
+            }
         }
     }
     Spacer(

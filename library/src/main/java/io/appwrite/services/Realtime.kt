@@ -16,6 +16,18 @@ import okhttp3.internal.concurrent.TaskRunner
 import okhttp3.internal.ws.RealWebSocket
 import java.util.*
 import android.util.Log
+import io.ktor.client.plugins.websocket.webSocket
+import io.ktor.client.plugins.websocket.webSocketSession
+import io.ktor.client.plugins.websocket.wss
+import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.headers
+import io.ktor.client.request.url
+import io.ktor.http.URLBuilder
+import io.ktor.http.Url
+import io.ktor.websocket.Frame
+import io.ktor.websocket.readText
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import java.net.URL
 import kotlin.coroutines.CoroutineContext
 
 class Realtime(client: Client) : Service(client), CoroutineScope {
@@ -31,7 +43,6 @@ class Realtime(client: Client) : Service(client), CoroutineScope {
 
         private const val DEBOUNCE_MILLIS = 1L
 
-        private var socket: RealWebSocket? = null
         private var activeChannels = mutableSetOf<String>()
         private var activeSubscriptions = mutableMapOf<Int, RealtimeCallback>()
 
@@ -39,6 +50,7 @@ class Realtime(client: Client) : Service(client), CoroutineScope {
         private var reconnectAttempts = 0
         private var subscriptionsCounter = 0
         private var reconnect = true
+        private var socketJob: Job? = null
     }
 
     private fun createSocket() {
@@ -54,30 +66,95 @@ class Realtime(client: Client) : Service(client), CoroutineScope {
                 .append("&channels[]=$it")
         }
 
-        val request = Request.Builder()
-            .url("${client.endPointRealtime}/realtime?$queryParamBuilder")
-            .build()
-
-        if (socket != null) {
+        if (socketJob != null) {
             reconnect = false
             closeSocket()
         }
 
-        socket = RealWebSocket(
-            taskRunner = TaskRunner.INSTANCE,
-            originalRequest = request,
-            listener = AppwriteWebSocketListener(),
-            random = Random(),
-            pingIntervalMillis = 20_000,
-            extensions = null,
-            minimumDeflateSize = 1555
-        )
+        socketJob = launch {
+            client.http.wss(
+                request = {
+                    url(Url("${client.endPointRealtime}/realtime?$queryParamBuilder"))
+                    headers {
+                        client.headers.forEach {
+                            append(it.key, it.value)
+                        }
+                    }
+                }
+            ) {
+                reconnectAttempts = 0
+                try {
+                    for (frame in incoming) {
+                        println("onMessage")
+                        val text = (frame as Frame.Text).readText()
+                        launch(IO) {
+                            val message = text.fromJson<RealtimeResponse>()
+                            when (message.type) {
+                                TYPE_ERROR -> handleResponseError(message)
+                                TYPE_EVENT -> handleResponseEvent(message)
+                            }
+                        }
+                    }
+                } catch (e: ClosedReceiveChannelException) {
+                    val cause = closeReason.await()
+                    println("onClose $cause")
+                    if (!reconnect) {
+                        reconnect = true
+                    } else {
+                        val timeout = getTimeout()
 
-//        socket!!.connect(client.http)
+                        Log.e(
+                            this@Realtime::class.java.name,
+                            "Realtime disconnected. Re-connecting in ${timeout / 1000} seconds.",
+                            AppwriteException(cause?.message, cause?.code?.toInt())
+                        )
+
+                        launch {
+                            delay(timeout)
+                            reconnectAttempts++
+                            createSocket()
+                        }
+                    }
+                } catch (e: Throwable) {
+                    println("onError ${closeReason.await()}")
+                    e.printStackTrace()
+                }
+            }
+        }
+
+//        socket = RealWebSocket(
+//            taskRunner = TaskRunner.INSTANCE,
+//            originalRequest = request,
+//            listener = AppwriteWebSocketListener(),
+//            random = Random(),
+//            pingIntervalMillis = 20_000,
+//            extensions = null,
+//            minimumDeflateSize = 1555
+//        )
+    }
+
+    private fun handleResponseError(message: RealtimeResponse) {
+        throw message.data.jsonCast<AppwriteException>()
+    }
+
+    private suspend fun handleResponseEvent(message: RealtimeResponse) {
+        val event = message.data.jsonCast<RealtimeResponseEvent<Any>>()
+        if (event.channels.isEmpty()) {
+            return
+        }
+        if (!event.channels.any { activeChannels.contains(it) }) {
+            return
+        }
+        activeSubscriptions.values.forEachAsync { subscription ->
+            if (event.channels.any { subscription.channels.contains(it) }) {
+                event.payload = event.payload.jsonCast(subscription.payloadClass)
+                subscription.callback(event)
+            }
+        }
     }
 
     private fun closeSocket() {
-        socket?.close(RealtimeCode.POLICY_VIOLATION.value, null)
+        socketJob?.cancel(RealtimeCode.POLICY_VIOLATION.name, null)
     }
 
     private fun getTimeout() = when {

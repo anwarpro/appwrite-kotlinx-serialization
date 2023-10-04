@@ -33,6 +33,7 @@ import io.appwrite.Client
 import io.appwrite.models.Session
 import io.appwrite.services.Account
 import io.appwrite.services.Databases
+import io.appwrite.services.Realtime
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -130,7 +131,8 @@ private fun AppScreen() {
                                     currentScreen = Screen.LOGIN
                                 },
                                 account = Account(client),
-                                databases = Databases(client)
+                                databases = Databases(client),
+                                realtime = Realtime(client)
                             )
                         }
                     }

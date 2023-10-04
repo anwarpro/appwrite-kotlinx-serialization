@@ -18,6 +18,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +35,7 @@ import io.appwrite.ID
 import io.appwrite.models.User
 import io.appwrite.services.Account
 import io.appwrite.services.Databases
+import io.appwrite.services.Realtime
 import kotlinx.coroutines.launch
 
 
@@ -42,12 +44,25 @@ import kotlinx.coroutines.launch
 fun ColumnScope.Dashboard(
     onLogin: () -> Unit,
     account: Account? = null,
-    databases: Databases? = null
+    databases: Databases? = null,
+    realtime: Realtime? = null
 ) {
     var userResponse by remember {
         mutableStateOf<NetworkResponse<User<Map<String, Any>>>>(NetworkResponse.Idle)
     }
     val scope = rememberCoroutineScope()
+
+    // Subscribe to files channel
+    val fileCreateSubscription = remember {
+        realtime!!.subscribe("files") {
+            println("events => " + it.events)
+            if (it.events.contains("buckets.*.files.*.create")) {
+                // Log when a new file is uploaded
+                println("events => " + it.payload.toString())
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         try {
             userResponse = NetworkResponse.Loading
@@ -157,7 +172,6 @@ fun ColumnScope.Dashboard(
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
-
                     }
                 },
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)

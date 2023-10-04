@@ -66,7 +66,7 @@ class Client @JvmOverloads constructor(
 
     lateinit var http: HttpClient
 
-    private val headers: MutableMap<String, String>
+    val headers: MutableMap<String, String>
 
     val config: MutableMap<String, String>
 

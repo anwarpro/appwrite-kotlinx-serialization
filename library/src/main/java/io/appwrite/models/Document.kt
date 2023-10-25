@@ -1,52 +1,55 @@
 package io.appwrite.models
 
-import com.google.gson.annotations.SerializedName
 import io.appwrite.extensions.jsonCast
+import io.appwrite.json.AnyValueSerializer
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 /**
  * Document
  */
+@Serializable
 data class Document<T>(
     /**
      * Document ID.
      */
-    @SerializedName("\$id")
+    @SerialName("\$id")
     val id: String,
 
     /**
      * Collection ID.
      */
-    @SerializedName("\$collectionId")
+    @SerialName("\$collectionId")
     val collectionId: String,
 
     /**
      * Database ID.
      */
-    @SerializedName("\$databaseId")
+    @SerialName("\$databaseId")
     val databaseId: String,
 
     /**
      * Document creation date in ISO 8601 format.
      */
-    @SerializedName("\$createdAt")
+    @SerialName("\$createdAt")
     val createdAt: String,
 
     /**
      * Document update date in ISO 8601 format.
      */
-    @SerializedName("\$updatedAt")
+    @SerialName("\$updatedAt")
     val updatedAt: String,
 
     /**
      * Document permissions. [Learn more about permissions](/docs/permissions).
      */
-    @SerializedName("\$permissions")
-    val permissions: List<Any>,
+    @SerialName("\$permissions")
+    val permissions: List<@Serializable(with = AnyValueSerializer::class) Any?>,
 
     /**
      * Additional properties
      */
-    @SerializedName("data")
+    @SerialName("data")
     val data: T
 ) {
     fun toMap(): Map<String, Any> = mapOf(

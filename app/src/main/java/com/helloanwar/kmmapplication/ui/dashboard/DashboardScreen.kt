@@ -1,16 +1,23 @@
 package com.helloanwar.kmmapplication.ui.dashboard
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -18,7 +25,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.helloanwar.kmmapplication.ui.theme.KmmApplicationTheme
 import com.helloanwar.kmmapplication.ui.utils.NetworkResponse
 import io.appwrite.ID
+import io.appwrite.models.DocumentList
 import io.appwrite.models.User
 import io.appwrite.services.Account
 import io.appwrite.services.Databases
@@ -49,6 +56,9 @@ fun ColumnScope.Dashboard(
 ) {
     var userResponse by remember {
         mutableStateOf<NetworkResponse<User<Map<String, Any>>>>(NetworkResponse.Idle)
+    }
+    var allProducts by remember {
+        mutableStateOf<NetworkResponse<DocumentList<Map<String, Any>>>>(NetworkResponse.Idle)
     }
     val scope = rememberCoroutineScope()
 
@@ -75,6 +85,24 @@ fun ColumnScope.Dashboard(
             onLogin()
         }
     }
+
+    LaunchedEffect(userResponse) {
+        if (userResponse is NetworkResponse.Success) {
+            try {
+
+                allProducts = NetworkResponse.Loading
+                val products = databases!!.listDocuments(
+                    databaseId = "64d7161aef4a3d5e1223",
+                    collectionId = "64d71622df99d4c128c4"
+                )
+                allProducts = NetworkResponse.Success(products)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                allProducts = NetworkResponse.Failure(e.localizedMessage ?: "")
+            }
+        }
+    }
+
     Spacer(modifier = Modifier.height(16.dp))
     Text(
         text = "Dashboard",
@@ -101,17 +129,16 @@ fun ColumnScope.Dashboard(
             //show users details
         }
     }
+
     AnimatedVisibility(
         visible = userResponse is NetworkResponse.Success,
         modifier = Modifier
             .wrapContentHeight()
             .fillMaxWidth()
+            .animateContentSize()
     ) {
         val user = (userResponse as NetworkResponse.Success).data
         var productName by remember { mutableStateOf("") }
-        var allProducts by remember {
-            mutableStateOf(NetworkResponse.Idle)
-        }
 
         Column {
             Text(
@@ -124,7 +151,9 @@ fun ColumnScope.Dashboard(
                     .height(16.dp)
             )
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 //add product text box
@@ -135,7 +164,10 @@ fun ColumnScope.Dashboard(
                     },
                     placeholder = {
                         Text(text = "Product name")
-                    }
+                    },
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .weight(1f)
                 )
 
                 Button(
@@ -174,16 +206,65 @@ fun ColumnScope.Dashboard(
                         }
                     }
                 },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text(text = "Logout", color = MaterialTheme.colorScheme.error)
             }
         }
     }
-    Spacer(
+    LazyColumn(
         modifier = Modifier
-            .weight(1f)
-    )
+            .fillMaxWidth()
+            .wrapContentHeight()
+            .weight(1f),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(bottom = 80.dp)
+    ) {
+        when (val data = allProducts) {
+            is NetworkResponse.Failure -> {
+                item {
+                    Text(
+                        text = data.error,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    )
+                }
+            }
+
+            NetworkResponse.Idle -> {
+
+            }
+
+            NetworkResponse.Loading -> {
+                item {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .align(Alignment.CenterHorizontally)
+                    )
+                }
+            }
+
+            is NetworkResponse.Success -> {
+                items(data.data.documents) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Text(text = "${it.data["name"]}")
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Preview(showBackground = true)

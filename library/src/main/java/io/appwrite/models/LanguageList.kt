@@ -1,7 +1,6 @@
 package io.appwrite.models
 
-import com.google.gson.annotations.SerializedName
-import io.appwrite.extensions.jsonCast
+import kotlinx.serialization.SerialName
 
 /**
  * Languages List
@@ -10,13 +9,13 @@ data class LanguageList(
     /**
      * Total number of languages documents that matched your query.
      */
-    @SerializedName("total")
+    @SerialName("total")
     val total: Long,
 
     /**
      * List of languages.
      */
-    @SerializedName("languages")
+    @SerialName("languages")
     val languages: List<Language>,
 
 ) {

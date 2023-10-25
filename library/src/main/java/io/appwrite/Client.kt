@@ -2,11 +2,10 @@ package io.appwrite
 
 import android.content.Context
 import android.content.pm.PackageManager
-import com.google.gson.GsonBuilder
-import com.google.gson.reflect.TypeToken
 import io.appwrite.cookies.stores.AcceptAllCookiesStorage
 import io.appwrite.exceptions.AppwriteException
-import io.appwrite.json.PreciseNumberAdapter
+import io.appwrite.json.toAnyNotNull
+import io.appwrite.json.toJsonElement
 import io.appwrite.models.InputFile
 import io.appwrite.models.UploadProgress
 import io.ktor.client.HttpClient
@@ -31,10 +30,12 @@ import io.ktor.client.statement.readBytes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
-import io.ktor.serialization.gson.gson
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -59,10 +60,7 @@ class Client @JvmOverloads constructor(
 
     private val job = Job()
 
-    private val gson = GsonBuilder().registerTypeAdapter(
-        object : TypeToken<Map<String, Any>>() {}.type,
-        PreciseNumberAdapter()
-    ).create()
+    private val json = Json
 
     lateinit var http: HttpClient
 
@@ -160,7 +158,7 @@ class Client @JvmOverloads constructor(
 
                 }
                 install(ContentNegotiation) {
-                    gson()
+                    json(json = json)
                 }
                 install(Logging) {
                     logger = object : Logger {
@@ -304,7 +302,7 @@ class Client @JvmOverloads constructor(
                 )
             )
         } else {
-            val body = gson.toJson(filteredParams)
+            val body = json.encodeToString(filteredParams.toJsonElement())
             httpBuilder.apply {
                 contentType(ContentType.Application.Json)
                 setBody(body)
@@ -458,7 +456,7 @@ class Client @JvmOverloads constructor(
         responseType: Class<T>,
         converter: ((Any) -> T)? = null
     ): T {
-        return try {
+        try {
             val response: HttpResponse = http.request(builder = request)
 
             when (responseType) {
@@ -476,10 +474,7 @@ class Client @JvmOverloads constructor(
                 return true as T
             }
 
-            val map = gson.fromJson<Any>(
-                body,
-                object : TypeToken<Any>() {}.type
-            )
+            val map = json.parseToJsonElement(body).toAnyNotNull()
             return converter?.invoke(map) ?: map as T
         } catch (e: Exception) {
             e.printStackTrace()

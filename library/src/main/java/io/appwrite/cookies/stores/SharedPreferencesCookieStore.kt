@@ -60,7 +60,6 @@ fun Cookie.fillDefaults(requestUrl: Url): Cookie {
     return result
 }
 
-
 class AcceptAllCookiesStorage(
     context: Context,
     private val name: String

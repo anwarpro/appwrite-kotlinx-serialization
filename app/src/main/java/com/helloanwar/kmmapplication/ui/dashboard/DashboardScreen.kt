@@ -38,12 +38,14 @@ import androidx.compose.ui.unit.dp
 import com.helloanwar.kmmapplication.ui.theme.KmmApplicationTheme
 import com.helloanwar.kmmapplication.ui.utils.NetworkResponse
 import io.appwrite.ID
+import io.appwrite.extensions.classOf
 import io.appwrite.models.DocumentList
 import io.appwrite.models.User
 import io.appwrite.services.Account
 import io.appwrite.services.Databases
 import io.appwrite.services.Realtime
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,7 +60,7 @@ fun ColumnScope.Dashboard(
         mutableStateOf<NetworkResponse<User<Map<String, Any>>>>(NetworkResponse.Idle)
     }
     var allProducts by remember {
-        mutableStateOf<NetworkResponse<DocumentList<Map<String, Any>>>>(NetworkResponse.Idle)
+        mutableStateOf<NetworkResponse<DocumentList<Product>>>(NetworkResponse.Idle)
     }
     val scope = rememberCoroutineScope()
 
@@ -91,9 +93,10 @@ fun ColumnScope.Dashboard(
             try {
 
                 allProducts = NetworkResponse.Loading
-                val products = databases!!.listDocuments(
+                val products: DocumentList<Product> = databases!!.listDocuments(
                     databaseId = "64d7161aef4a3d5e1223",
-                    collectionId = "64d71622df99d4c128c4"
+                    collectionId = "64d71622df99d4c128c4",
+                    nestedType = classOf<Product>()
                 )
                 allProducts = NetworkResponse.Success(products)
             } catch (e: Exception) {
@@ -258,7 +261,7 @@ fun ColumnScope.Dashboard(
                                 .fillMaxWidth()
                                 .padding(16.dp)
                         ) {
-                            Text(text = "${it.data["name"]}")
+                            Text(text = it.data.name)
                         }
                     }
                 }
@@ -276,3 +279,6 @@ fun DashboardPreview() {
         }
     }
 }
+
+@Serializable
+data class Product(val name: String)

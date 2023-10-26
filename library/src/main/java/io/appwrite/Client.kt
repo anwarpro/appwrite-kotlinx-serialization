@@ -60,7 +60,9 @@ class Client @JvmOverloads constructor(
 
     private val job = Job()
 
-    private val json = Json
+    private val json = Json {
+        ignoreUnknownKeys = true
+    }
 
     lateinit var http: HttpClient
 

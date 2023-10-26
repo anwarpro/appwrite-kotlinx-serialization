@@ -5,20 +5,24 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 
-val json = Json
+val json = Json {
+    ignoreUnknownKeys = true
+}
 
 fun Any.toJson(): String {
-    println("toJson => ${this.toJsonElement()}")
-    return json.encodeToString(this.toJsonElement())
+    return json.encodeToString(toJsonElement())
 }
 
 fun <T> String.fromJson(clazz: Class<T>): T {
-    println("toJson => $this")
     return try {
-        json.decodeFromString(serializer(clazz), this) as T
+        val data = json.decodeFromString(serializer(clazz), this) as T
+        println("toJson => ${data}")
+        data
     } catch (e: Exception) {
         e.printStackTrace()
-        json.parseToJsonElement(this) as T
+        val data = json.parseToJsonElement(this) as T
+        println("exception toJson => ${data}")
+        data
     }
 }
 

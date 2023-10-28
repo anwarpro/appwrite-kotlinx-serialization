@@ -2,8 +2,10 @@ package io.appwrite.cookies.stores
 
 import android.content.Context
 import android.util.Log
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import io.appwrite.cookies.InternalCookie
+import io.appwrite.cookies.InternalCookie.Companion.toCookie
+import io.appwrite.cookies.InternalCookie.Companion.toCustomCookie
+import io.appwrite.extensions.fromJson
 import io.ktor.client.plugins.cookies.CookiesStorage
 import io.ktor.http.Cookie
 import io.ktor.http.Url
@@ -13,6 +15,8 @@ import io.ktor.util.date.getTimeMillis
 import io.ktor.util.toLowerCasePreservingASCIIRules
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.min
 
@@ -65,7 +69,6 @@ class AcceptAllCookiesStorage(
     private val name: String
 ) : CookiesStorage {
     private val preferences = context.getSharedPreferences(name, Context.MODE_PRIVATE)
-    private val gson = Gson()
 
     private val container: MutableList<Cookie> = mutableListOf()
     private val oldestCookie: AtomicLong = AtomicLong(0L)
@@ -74,9 +77,7 @@ class AcceptAllCookiesStorage(
     init {
         preferences.all.forEach { (key, value) ->
             try {
-                val cookieType = object : TypeToken<Cookie>() {}.type
-                val internalCookies =
-                    gson.fromJson<Cookie>(value.toString(), cookieType)
+                val internalCookies = value.toString().fromJson<InternalCookie>().toCookie()
                 container.add(internalCookies)
             } catch (exception: Throwable) {
                 exception.printStackTrace()
@@ -118,8 +119,7 @@ class AcceptAllCookiesStorage(
             }
         }
 
-        val cookieType = object : TypeToken<Cookie>() {}.type
-        val json = gson.toJson(copyCookie, cookieType)
+        val json = Json.encodeToString(copyCookie.toCustomCookie())
         preferences
             .edit()
             .putString(copyCookie.name, json)

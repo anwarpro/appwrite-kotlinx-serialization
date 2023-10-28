@@ -1,49 +1,48 @@
 package io.appwrite.cookies
 
-import android.os.Build
-import java.net.HttpCookie
+import io.ktor.http.Cookie
+import io.ktor.util.date.GMTDate
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class InternalCookie(
-    val comment: String?,
-    val commentURL: String?,
-    val discard: Boolean?,
-    val domain: String,
-    val maxAge: Long?,
     val name: String,
-    val path: String?,
-    val portlist: String?,
-    val secure: Boolean?,
     val value: String,
-    val version: Int?,
-    var httpOnly: Boolean? = null
+    val maxAge: Int = 0,
+    val expires: Long? = null,
+    val domain: String? = null,
+    val path: String? = null,
+    val secure: Boolean = false,
+    val httpOnly: Boolean = false,
+    val extensions: Map<String, String?> = emptyMap()
 ) {
-    constructor(cookie: HttpCookie) : this(
-        cookie.comment,
-        cookie.commentURL,
-        cookie.discard,
-        cookie.domain,
-        cookie.maxAge,
-        cookie.name,
-        cookie.path,
-        cookie.portlist,
-        cookie.secure,
-        cookie.value,
-        cookie.version
-    )
+    companion object {
+        fun InternalCookie.toCookie(): Cookie {
+            return Cookie(
+                name = this.name,
+                value = this.value,
+                maxAge = this.maxAge,
+                expires = this.expires?.let { GMTDate(it) },
+                domain = this.domain,
+                path = this.path,
+                secure = this.secure,
+                httpOnly = this.httpOnly,
+                extensions = this.extensions
+            )
+        }
 
-    fun toHttpCookie() = HttpCookie(name, value).apply {
-        comment = this@InternalCookie.comment
-        commentURL = this@InternalCookie.commentURL
-        discard = this@InternalCookie.discard == true
-        domain = this@InternalCookie.domain
-        maxAge = this@InternalCookie.maxAge ?: 0
-        path = this@InternalCookie.path
-        portlist = this@InternalCookie.portlist
-        secure = this@InternalCookie.secure == true
-        version = this@InternalCookie.version ?: 0
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            isHttpOnly = (this@InternalCookie.httpOnly == true)
+        fun Cookie.toCustomCookie(): InternalCookie {
+            return InternalCookie(
+                name = this.name,
+                value = this.value,
+                maxAge = this.maxAge,
+                expires = this.expires?.timestamp,
+                domain = this.domain,
+                path = this.path,
+                secure = this.secure,
+                httpOnly = this.httpOnly,
+                extensions = this.extensions
+            )
         }
     }
 }

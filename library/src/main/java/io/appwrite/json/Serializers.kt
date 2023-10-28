@@ -17,7 +17,7 @@ private fun Any?.toJsonPrimitive(): JsonPrimitive {
         is Number -> JsonPrimitive(this)
         is String -> JsonPrimitive(this)
         // add custom convert
-        else -> throw Exception("不支持类型:${this::class}")
+        else -> throw Exception("Not implemented:${this::class}")
     }
 }
 
@@ -48,7 +48,7 @@ private fun JsonPrimitive.toAnyValue(): Any? {
     if (doubleValue != null) {
         return doubleValue
     }
-    throw Exception("未知值：${content}")
+    throw Exception("Not implemented：${content}")
 }
 
 private fun JsonPrimitive.toAnyNotNullValue(): Any {
@@ -75,7 +75,7 @@ private fun JsonPrimitive.toAnyNotNullValue(): Any {
     if (doubleValue != null) {
         return doubleValue
     }
-    throw Exception("未知值：${content}")
+    throw Exception("Not implemented：${content}")
 }
 
 object AnyValueSerializer : KSerializer<Any?> {
@@ -106,7 +106,7 @@ fun Any?.toJsonElement(): JsonElement {
         is Map<*, *> -> JsonObject(this.map { it.key.toString() to it.value.toJsonElement() }
             .toMap())
         // add custom convert
-        else -> throw Exception("不支持类型 ${this::class}=${this}}")
+        else -> throw Exception("Not implemented ${this::class}=${this}}")
     }
 }
 

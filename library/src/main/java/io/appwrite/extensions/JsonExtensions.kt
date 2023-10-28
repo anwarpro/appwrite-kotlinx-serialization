@@ -16,12 +16,12 @@ fun Any.toJson(): String {
 fun <T> String.fromJson(clazz: Class<T>): T {
     return try {
         val data = json.decodeFromString(serializer(clazz), this) as T
-        println("toJson => ${data}")
+        println("toJson => $data")
         data
     } catch (e: Exception) {
         e.printStackTrace()
         val data = json.parseToJsonElement(this) as T
-        println("exception toJson => ${data}")
+        println("exception toJson => $data")
         data
     }
 }

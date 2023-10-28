@@ -51,11 +51,12 @@ dependencies {
     implementation("io.ktor:ktor-client-core:2.3.3")
     implementation("io.ktor:ktor-client-okhttp:2.3.3")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.3")
-    implementation("io.ktor:ktor-serialization-gson:2.3.3")
+//    implementation("io.ktor:ktor-serialization-gson:2.3.3")
     api("io.ktor:ktor-serialization-kotlinx-json:2.3.3")
     implementation("io.ktor:ktor-client-websockets:2.3.3")
 //    implementation("ch.qos.logback:logback-classic:$logback_version")
     implementation("io.ktor:ktor-client-logging:2.3.3")
+//    implementation("com.russhwolf:multiplatform-settings:1.1.0")
 
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.5.1")
     implementation("androidx.lifecycle:lifecycle-common-java8:2.5.1")
